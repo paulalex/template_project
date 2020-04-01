@@ -1,11 +1,11 @@
 module "common_variables" {
-  source = "../../../modules/common_variables"
+  source = "../../modules/common_variables"
 
   environment = var.environment
 }
 
 module "vpc_variables" {
-  source = "../../../modules/vpc_variables"
+  source = "../../modules/vpc_variables"
 
   environment = var.environment
 }

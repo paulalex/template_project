@@ -1,5 +1,5 @@
 module "common_variables" {
-  source = "../../../modules/common_variables"
+  source = "../../modules/common_variables"
 
   environment = var.environment
 }

@@ -9,13 +9,13 @@ data "terraform_remote_state" "vpc" {
 }
 
 module "common_variables" {
-  source = "../../../modules/common_variables"
+  source = "../../modules/common_variables"
 
   environment = var.environment
 }
 
 module "vpc_variables" {
-  source = "../../../modules/vpc_variables"
+  source = "../../modules/vpc_variables"
 
   enable_vpn_gateway = var.enable_vpn_gateway
 }

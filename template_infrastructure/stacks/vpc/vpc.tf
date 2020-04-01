@@ -4,13 +4,13 @@ data "aws_security_group" "default" {
 }
 
 module "common_variables" {
-  source = "../../../modules/common_variables"
+  source = "../../modules/common_variables"
 
   environment = var.environment
 }
 
 module "vpc_variables" {
-  source = "../../../modules/vpc_variables"
+  source = "../../modules/vpc_variables"
 
   enable_vpn_gateway = var.enable_vpn_gateway
 }
@@ -31,7 +31,7 @@ locals {
 }
 
 module "vpc" {
-  source = "../../../modules/vpc"
+  source = "../../modules/vpc"
 
   name = "${var.environment}-${var.vpc_name}"
 
