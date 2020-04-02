@@ -9,7 +9,18 @@ data "terraform_remote_state" "vpc" {
 
   config = {
     bucket = lookup(module.common_variables.terraform_state_s3_bucket, var.environment, "")
-    key    = var.vpc_terraform_state_key
+    key    = module.common_variables.vpc_terraform_state_key
+    region = module.common_variables.aws_region
+  }
+}
+
+
+data "terraform_remote_state" "route53" {
+  backend = "s3"
+
+  config = {
+    bucket = lookup(module.common_variables.terraform_state_s3_bucket, var.environment, "")
+    key    = module.common_variables.r53_terraform_state_key
     region = module.common_variables.aws_region
   }
 }
@@ -98,6 +109,20 @@ resource "aws_security_group" "vpn" {
     protocol    = "udp"
     cidr_blocks     = ["0.0.0.0/0"]
   }
+
+  egress {
+    protocol    = "tcp"
+    from_port   = 443
+    to_port     = 443
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    protocol    = "tcp"
+    from_port   = 80
+    to_port     = 80
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 resource "aws_security_group_rule" "vpn_egress_ssh_to_private_subnets" {
@@ -159,7 +184,7 @@ resource "aws_iam_role_policy" "ebs_volume_policy" {
     "Version": "2012-10-17",
     "Statement": [
       {
-        "Sid": "Stmt1581082925365",
+        "Sid": "AllowEBSVolumeAttachment",
         "Action": [
           "ec2:AttachVolume",
           "ec2:DescribeVolumes"
@@ -181,12 +206,54 @@ resource "aws_iam_role_policy" "attach_eip_policy" {
     "Version": "2012-10-17",
     "Statement": [
       {
-        "Sid": "Stmt1581082925365",
+        "Sid": "AllowEIPAttachment",
         "Action": [
           "ec2:AssociateAddress"
         ],
         "Effect": "Allow",
         "Resource": "*"
+      }
+    ]
+  }
+  EOF
+}
+
+resource "aws_iam_role_policy" "modify_instance_policy" {
+  name = "${var.environment}-${var.stack_name}-modify-instance-policy"
+  role = aws_iam_role.vpn_role.name
+
+  policy = <<-EOF
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowSourceDestCheckModifications",
+        "Action": [
+          "ec2:ModifyInstanceAttribute"
+        ],
+        "Effect": "Allow",
+        "Resource": "*"
+      }
+    ]
+  }
+  EOF
+}
+
+resource "aws_iam_role_policy" "modify_r53_policy" {
+  name = "${var.environment}-${var.stack_name}-modify-53-policy"
+  role = aws_iam_role.vpn_role.name
+
+  policy = <<-EOF
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowR53Modifications",
+        "Effect": "Allow",
+        "Action": [
+        "route53:ChangeResourceRecordSets"
+        ],
+        "Resource":  "arn:aws:route53:::hostedzone/${data.terraform_remote_state.route53.outputs.main_hosted_zone_id}"
       }
     ]
   }
@@ -199,23 +266,46 @@ data "template_file" "user_data" {
   )
 
   vars = {
-    admin_password    = var.vpnas_admin_password
-    mount_volume      = data.template_file.mount_volume.rendered
-    eip_identifier    = aws_eip.vpn.id
-    vpnas_path        = var.vpnas_path
-    fqdn_name         = "${var.vpnas_admin_dns_name}.${var.environment}"
-    public_fqdn_name  = "${var.vpnas_client_dns_name}.${module.common_variables.dns_zone_name}"
+    admin_password                = var.vpnas_admin_password
+    mount_volume                  = data.template_file.mount_volume.rendered
+    eip_identifier                = aws_eip.vpn.id
+    vpnas_path                    = var.vpnas_path
+    public_fqdn_name              = "${var.vpnas_client_dns_name}.${module.common_variables.dns_zone_name}"
+    create_route53_public_record  = data.template_file.create_route53_public_record.rendered
+    create_route53_private_record = data.template_file.create_route53_private_record.rendered
   }
 }
 
 data "template_file" "mount_volume" {
   template = file(
-    "${path.module}/templates/format_and_mount_volume.sh",
+    "${path.module}/../../templates/format_and_mount_volume.sh",
   )
 
   vars = {
     volume_tag  = var.vpn_ebs_tag_name
     device_path = var.device_path
+  }
+}
+
+data "template_file" "create_route53_public_record" {
+  template = file(
+    "${path.module}/../../templates/create_r53_record.sh",
+  )
+
+  vars = {
+    fqdn_name   = "${var.vpnas_client_dns_name}.${module.common_variables.dns_zone_name}"
+    r53_zone_id = data.terraform_remote_state.route53.outputs.main_hosted_zone_id
+  }
+}
+
+data "template_file" "create_route53_private_record" {
+  template = file(
+    "${path.module}/../../templates/create_r53_record.sh",
+  )
+
+  vars = {
+    fqdn_name   = "${var.vpnas_admin_dns_name}.${module.common_variables.dns_zone_name}"
+    r53_zone_id = data.terraform_remote_state.route53.outputs.main_hosted_zone_id
   }
 }
 

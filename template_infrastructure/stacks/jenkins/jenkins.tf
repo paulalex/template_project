@@ -165,7 +165,7 @@ data "template_file" "user_data" {
 
 data "template_file" "mount_volume" {
   template = file(
-    "${path.module}/templates/format_and_mount_volume.sh",
+    "${path.module}/../../templates/format_and_mount_volume.sh",
   )
 
   vars = {

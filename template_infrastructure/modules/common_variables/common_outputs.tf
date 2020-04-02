@@ -44,6 +44,11 @@ output "public_subnets" {
 }
 
 output "vpc_terraform_state_key" {
-  description = "The key for the VPC remove state"
+  description = "The key for the VPC remote state"
   value = var.vpc_terraform_state_key
+}
+
+output "r53_terraform_state_key" {
+  description = "The key for the R53 remote state"
+  value = var.r53_terraform_state_key
 }

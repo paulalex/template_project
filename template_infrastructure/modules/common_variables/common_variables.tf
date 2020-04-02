@@ -19,3 +19,8 @@ variable "vpc_terraform_state_key" {
   type = string
   default = "vpc/terraform.tfstate"
 }
+
+variable "r53_terraform_state_key" {
+  type = string
+  default = "r53/terraform.tfstate"
+}

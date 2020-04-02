@@ -3,14 +3,14 @@ set -ex
 exec 1> /var/tmp/user_data.log 2>&1
 
 apt_wait () {
-  while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
+  while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
     sleep 1
   done
-  while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
+  while fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
     sleep 1
   done
   if [ -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
-    while sudo fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
+    while fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
       sleep 1
     done
   fi
@@ -28,7 +28,6 @@ timedatectl set-timezone "Europe/London"
 sysctl vm.swappiness=0
 echo "vm.swappiness = 0" >> /etc/sysctl.conf
 
-# Disable unattended updates
 apt_wait
 apt update
 apt install -y lvm2 jq awscli
@@ -37,10 +36,18 @@ apt install -y lvm2 jq awscli
 instanceid=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 region=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region)
 ip=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-
 aws ec2 associate-address --instance-id $${instanceid} --allocation-id ${eip_identifier} --region $${region}
 
+# Disable source\destination checking
+aws ec2 modify-instance-attribute --no-source-dest-check --instance-id $${instanceid} --region $${region}
+
 ${mount_volume}
+
+# Create VPN public DNS
+${create_route53_public_record}
+
+# Create VPN private DNS
+${create_route53_private_record}
 
 if [ ! -d "/data/openvpn_as" ]; then
     ${vpnas_path}/scripts/sacli --key "vpn.server.google_auth.enable" --value "true" ConfigPut
