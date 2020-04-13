@@ -14,18 +14,18 @@ def get_config_profiles():
     config = ConfigParser()
     config.read([path.join(path.expanduser("~"), '.aws/config')])
 
-    sections = []
+    config_sections = []
     for section in config.sections():
-        sections.append(section.split(' ')[-1])
-    return sections
+        config_sections.append(section.split(' ')[-1])
+    return config_sections
 
 
-def role_arn_to_session(aws_profile):
+def role_arn_to_session(profile):
     config = ConfigParser()
     config.read([path.join(path.expanduser("~"), '.aws/config')])
-    role_arn = config.get('profile {0}'.format(aws_profile), 'role_arn')
-    mfa_serial = config.get('profile {0}'.format(aws_profile), 'mfa_serial')
-    credential_profile = config.get('profile {0}'.format(aws_profile), 'credential_profile')
+    role_arn = config.get('profile {0}'.format(profile), 'role_arn')
+    mfa_serial = config.get('profile {0}'.format(profile), 'mfa_serial')
+    credential_profile = config.get('profile {0}'.format(profile), 'credential_profile')
 
     if credential_profile:
         boto3.setup_default_session(profile_name=credential_profile)
@@ -39,33 +39,44 @@ def role_arn_to_session(aws_profile):
                                   SerialNumber=mfa_serial,
                                   DurationSeconds=SESSION_DURATION,
                                   TokenCode=getpass.getpass("MFA Token: "))
-    print(response)
+
     time_now = datetime.datetime.now()
+
     expiry_time = time_now + datetime.timedelta(seconds=SESSION_DURATION)
+
     print("Expiry time: {0}".format(expiry_time))
+    print(response)
     ## Copy the below into your terminal to export your temporary credentials
-    print("""
-        export AWS_ACCESS_KEY_ID={0}
-        export AWS_SECRET_ACCESS_KEY={1}
-        export AWS_SESSION_TOKEN={2}
-        export TEXAS_PROFILE={3}
-        export TEXAS_SESSION_EXPIRY_TIME={4}
-        """.format(str(response['Credentials']['AccessKeyId']),
+    print(format_response(response, expiry_time, profile))
+
+def format_response(response, expiry_time, aws_profile):
+    return """
+    export AWS_ACCESS_KEY_ID={0}
+    export AWS_SECRET_ACCESS_KEY={1}
+    export AWS_SESSION_TOKEN={2}
+    export TEXAS_PROFILE={3}
+    export TEXAS_SESSION_EXPIRY_TIME={4}
+    """.format(str(response['Credentials']['AccessKeyId']),
                str(response['Credentials']['SecretAccessKey']),
                str(response['Credentials']['SessionToken']),
                str(aws_profile),
-               expiry_time.strftime('%H:%M:%S')))
-
-
-if __name__ == "__main__":
-    # Read in from the AWS config file
+               expiry_time.strftime('%H:%M:%S'))
+def main():
+    # Read in from the AWS config file in ~/.aws/config
     sections = get_config_profiles()
+
     c = 0
+
     print("\n# Select a profile by entering a number:\n")
+
     for i in sections:
         print("{0} - Profile: {1}".format(c, i))
         c += 1
+
     aws_profile = input("Profile number: ")
 
     role_arn_to_session(sections[int(aws_profile)])
+
+if __name__ == "__main__":
+    main()
 
